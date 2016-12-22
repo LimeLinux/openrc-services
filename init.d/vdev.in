@@ -1,0 +1,89 @@
+#!@RUNSCRIPT@
+
+
+VDEV_CONFIG=${VDEV_CONFIG:=/etc/vdev/vdevd.conf}
+VDEV_MOUNTPOINT=${VDEV_MOUNTPOINT:=/dev}
+command="/sbin/vdevd"
+command_args="-c ${VDEV_CONFIG} ${VDEV_MOUNTPOINT}"
+description="Start vdevd, populate /dev and load drivers"
+
+depend() {
+        provide dev
+        need sysfs dev-mount
+        before checkfs fsck
+}
+
+# load an ini file as a set of namespaced environment variables, echoing them to stdout
+# $1 is the path to the file
+# $2 is the namespace to be prepended to each variable name
+source_ini_file() {
+
+   local FILE_PATH NAMESPACE line KEY VALUE
+
+   FILE_PATH=$1
+   NAMESPACE=$2
+
+   /bin/cat $FILE_PATH | /bin/sed "s/.*\[.*\].*//g" | \
+   while read line; do
+
+      KEY=$(echo $line | /bin/sed "s/\(^.*\)=.*/\1/g");
+      VALUE=$(echo $line | /bin/sed "s/^.*=\(.*\)$/\1/g");
+
+      if [ -n "$KEY" ]; then
+         echo "${NAMESPACE}${KEY}=${VALUE}"
+      fi
+   done
+}
+
+
+# start up the system-wide vdevd
+# $@ arguments to vdevd
+start_pre() {
+        # system-wide vdevd needs "modern" sysfs
+        if [ -d /sys/class/mem/null -a ! -L /sys/class/mem/null ] || \
+           [ -e /sys/block -a ! -e /sys/class/block ]; then
+                ewarn "CONFIG_SYSFS_DEPRECATED must not be selected"
+                ewarn "Booting will continue in 30 seconds but many things will be broken"
+                sleep 30
+        fi
+
+        # load vdev config variables as vdev_config_*
+        eval $(source_ini_file $VDEV_CONFIG "vdev_config_")
+
+        # config sanity check
+        if [ -z "$vdev_config_pidfile" ]; then
+                ewarn "No PID file defined in $VDEV_CONFIG.  Please set the pidfile= directive."
+                ewarn "You will be unable stop or restart vdevd with this script."
+        fi
+
+        # clear uevent helper--vdevd subsumes its role
+        if [ -w /sys/kernel/uevent_helper ]; then
+                echo > /sys/kernel/uevent_helper
+        fi
+
+        # set the SELinux context for devices created in the initramfs
+        [ -x /sbin/restorecon ] && /sbin/restorecon -R $VDEV_MOUNTPOINT
+        
+        
+        # make sure log directory exists...
+        vdev_log_dir="$(echo "$vdev_config_logfile" | sed 's/[^/]\+$//g')"
+        checkpath -d "${vdev_log_dir}"
+        # make sure the pid directory exists
+        if [ -n "$vdev_config_pidfile" ]; then
+                vdev_pid_dir="$(echo "$vdev_config_pidfile" | sed 's/[^/]\+$//g')"
+                checkpath -d "${vdev_pid_dir}"
+                pidfile=${vdev_config_pidfile}
+              #  /bin/ln -s /dev/metadata/udev /run/udev
+            
+        fi
+}
+
+
+# reseed device files with --once
+# $@ arguments to vdevd
+reload() {
+   ebegin "(Re)seeding device files" "vdevd"
+   # run vdevd once
+   $VDEV_BIN -c $VDEV_CONFIG --once $@ $VDEV_MOUNTPOINT
+   eend $?
+}

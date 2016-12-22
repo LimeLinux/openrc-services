@@ -1,0 +1,7 @@
+#!@RUNSCRIPT@
+
+command="/usr/sbin/cupsd"
+
+depend() {
+    use logger
+}
