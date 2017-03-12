@@ -3,22 +3,17 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Id$
 
-pidfile="/run/vboxguest-service.pid"
-command="/usr/sbin/vboxguest-service"
-command_args="--foreground"
-command_background="true"
-
 depend() {
-        need dbus localmount
-	before xdm
+        need localmount
+
 }
 
-start_pre() {
+start() {
 	einfo "Loading kernel modules"
     /sbin/modprobe  vboxdrv 2>&1
 }
 
-stop_post() {
+stop() {
 	einfo "Removing kernel modules"
     /sbin/modprobe  vboxdrv 2>&1
 }
