@@ -3,23 +3,13 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Id$
 
-pidfile="/run/teamviewerd.pid"
-command="/opt/teamviewer/tv_bin/teamviewerd"
+
+name="teamviewerd"
+description="Daemon for TeamViewer remote control program"
+command="/opt/teamviewer/tv_bin/${name}"
 command_args="-d"
-command_donotify="true"
+pidfile="/run/${name}.pid"
 
 depend() {
-        need dbus localmount
-
-}
-
-start_pre() {
-	einfo "teamviewer Remote Control Application start"
-    /usr/bin/teamviewer --daemon start 2>&1
-
-}
-
-stop_post() {
-	einfo "teamviewer Remote Control Application stop"
-    /usr/bin/teamviewer --daemon stop 2>&1
+    need net
 }
